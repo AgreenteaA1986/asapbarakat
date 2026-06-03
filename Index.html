@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* ปรับ Palette สีให้ดูพรีเมียมและสบายตาขึ้น */
+      --primary: #1a2b4b;       /* น้ำเงินโทนโลโก้ */
+      --primary-dark: #111d33;  /* น้ำเงินเข้มสำหรับส่วนล่าง */
+      --accent: #10b981; 
+      --bg-main: #f1f5f9;
+    }
+
+    body {
+      font-family: 'Kanit', sans-serif;
+      background-color: var(--bg-main);
+      color: #1e293b;
+    }
+
+    /* การจัดการ Sidebar */
+    #sidebar {
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 17rem;
+    }
+
+    @media (min-width: 1024px) {
+      #sidebar { transform: translateX(0); position: fixed; height: 100vh; }
+      main { margin-left: 17rem; }
+    }
+
+    .sidebar-active {
+      background: rgba(255, 255, 255, 0.1);
+      border-right: 4px solid var(--accent);
+      color: #fff !important;
+      font-weight: 600;
+    }
+
+    .glass-card {
+      background: #ffffff;
+      border-radius: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.02);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .glass-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    .amount-font {
+      letter-spacing: -0.025em;
+      font-weight: 700;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+    /* Animation */
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex overflow-x-hidden">
+
+  <div id="overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"></div>
+
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 -translate-x-full lg:translate-x-0 flex flex-col shadow-2xl overflow-hidden">
+    <div class="p-8 text-center border-b border-white/5">
+      <div class="w-24 h-24 bg-transparent mx-auto mb-2 flex items-center justify-center overflow-hidden">
+        <img src="https://lh3.googleusercontent.com/d/132kNRGXeLDOw1ToXdXwmhQmt-XSjFGh4" 
+             alt="ASAP BARAKAT Logo" 
+             class="max-w-full max-h-full object-contain filter brightness-110">
+      </div>
+      
+      <h1 class="text-white font-black tracking-[0.1em] text-lg">ASAP BARAKAT</h1>
+      <p class="text-white/40 text-[9px] uppercase tracking-[0.3em] font-bold">Business Dashboard</p>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto custom-scrollbar py-6">
+      <div class="px-6 mb-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">Main Menu</div>
+      <button onclick="loadView(this, '', 'all')" id="btnAll" class="w-full flex items-center gap-3 px-6 py-3.5 text-sm text-white/70 hover:text-white transition-all sidebar-btn sidebar-active">
+        <span>📊</span> ภาพรวมบริษัท
+      </button>
+      <button onclick="loadGrowthView(this)" class="w-full flex items-center gap-3 px-6 py-3.5 text-sm text-white/70 hover:text-white transition-all sidebar-btn">
+        <span>📈</span> การเติบโต
+      </button>
+      <button onclick="loadMonthlyReportView(this)" class="w-full flex items-center gap-3 px-6 py-3.5 text-sm text-white/70 hover:text-white transition-all sidebar-btn">
+        <span>📑</span> รายงานประจำเดือน
+      </button>
+      <button onclick="loadAccDeliveryView(this)" class="w-full flex items-center gap-3 px-6 py-3.5 text-sm text-white/70 hover:text-white transition-all sidebar-btn">
+        <span>📁</span> รายงานการนำส่งบัญชี
+      </button>
+
+      <div class="px-6 mt-8 mb-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">Document Status</div>
+      <div class="space-y-1">
+        <button onclick="loadView(this, 'รอดำเนินการ', 'status')" class="w-full flex items-center gap-3 px-6 py-3 text-sm text-white/60 hover:text-white sidebar-btn">⏳ รอดำเนินการ</button>
+        <button onclick="loadView(this, 'ค้างชำระ', 'status')" class="w-full flex items-center gap-3 px-6 py-3 text-sm text-red-400 hover:text-red-300 sidebar-btn">🔴 ค้างชำระ</button>
+        <button onclick="loadView(this, 'ชำระแล้ว', 'status')" class="w-full flex items-center gap-3 px-6 py-3 text-sm text-emerald-400 hover:text-emerald-300 sidebar-btn">✅ ชำระแล้ว</button>
+      </div>
+
+      <div class="px-6 mt-8 mb-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">Customer List</div>
+      <div id="customerList" class="px-3 space-y-1">
+        <div class="text-center py-4 text-xs text-white/20 italic">กำลังโหลดรายชื่อ...</div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="flex-1 flex flex-col min-w-0">
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200 px-4 lg:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <button onclick="toggleSidebar()" class="lg:hidden p-2 bg-slate-100 rounded-lg text-slate-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <h2 id="pageTitle" class="text-xl lg:text-2xl font-black text-slate-800 tracking-tight">ภาพรวมธุรกิจ</h2>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-4">
+        <div class="hidden md:block relative">
+          <input type="text" onkeyup="searchTable(this.value)" placeholder="ค้นหาข้อมูล..." class="w-64 pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-xl text-sm focus:ring-2 ring-emerald-500/20 transition-all outline-none">
+          <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+        </div>
+
+        <select id="yearFilter" onchange="applyYearFilter(this.value)" class="hidden sm:block bg-slate-100 border-none rounded-xl text-sm font-bold text-slate-700 py-2.5 px-4 focus:ring-2 ring-emerald-500/20 outline-none cursor-pointer shadow-sm transition-all hover:bg-slate-200">
+          <option value="all">📅 ทุกปี</option>
+        </select>
+        <select id="monthFilter" onchange="applyMonthFilter(this.value)" class="hidden bg-slate-100 border-none rounded-xl text-sm font-bold text-slate-700 py-2.5 px-4 focus:ring-2 ring-emerald-500/20 outline-none cursor-pointer shadow-sm transition-all hover:bg-slate-200">
+          <option value="all">🗓️ ทุกเดือน</option>
+          <option value="0">มกราคม (01)</option>
+          <option value="1">กุมภาพันธ์ (02)</option>
+          <option value="2">มีนาคม (03)</option>
+          <option value="3">เมษายน (04)</option>
+          <option value="4">พฤษภาคม (05)</option>
+          <option value="5">มิถุนายน (06)</option>
+          <option value="6">กรกฎาคม (07)</option>
+          <option value="7">สิงหาคม (08)</option>
+          <option value="8">กันยายน (09)</option>
+          <option value="9">ตุลาคม (10)</option>
+          <option value="10">พฤศจิกายน (11)</option>
+          <option value="11">ธันวาคม (12)</option>
+        </select>
+
+        <button id="refreshBtn" onclick="refreshData()" class="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all shadow-sm flex items-center justify-center group" title="รีเฟรชข้อมูลล่าสุด">
+          <svg class="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+
+        <button id="mainCreateBtn" onclick="openForm('ใบส่งงาน/สรุปค่าใช้จ่าย', '')" class="bg-slate-900 text-white px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all whitespace-nowrap">
+        + สร้างเอกสาร
+        </button>
+      </div>
+    </header>
+
+    <div class="p-4 lg:p-8 space-y-8 fade-in">
+      <div id="analytics" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+
+      <div id="chartsSection" class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div class="glass-card p-6 border-t-4 border-emerald-500">
+          <h4 id="barChartTitle" class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">รายได้รายเดือนแยกตามสถานะ</h4>
+          <div class="h-[300px]"><canvas id="barChart"></canvas></div>
+        </div>
+        <div class="glass-card p-6 border-t-4 border-amber-500">
+          <h4 id="donutChartTitle" class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">สัดส่วนตามกลุ่มลูกค้า</h4>
+          <div class="h-[300px]"><canvas id="donutChart"></canvas></div>
+        </div>
+      </div>
+
+      <div id="kpi-efficiency-section" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+      <div id="summaryCards" class="grid grid-cols-1 lg:grid-cols-2 gap-8"></div>
+      <div id="tableSection" class="pb-20"></div>
+    </div>
+  </main>
+
+  <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] animate-in fade-in duration-300">
+  <div class="bg-white w-full max-w-2xl rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden relative animate-in slide-in-from-bottom duration-500 sm:slide-in-from-none">
+    
+    <div class="px-6 py-4 sm:px-8 sm:py-6 bg-slate-50 border-b flex justify-between items-center shrink-0">
+      <div>
+        <h3 class="text-lg sm:text-xl font-black text-slate-800 uppercase tracking-tight">จัดการข้อมูลเอกสาร</h3>
+        <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Document Management</p>
+      </div>
+      <button onclick="closeModal()" class="w-10 h-10 rounded-full hover:bg-red-50 hover:text-red-500 text-slate-400 flex items-center justify-center font-bold">✕</button>
+    </div>
+
+    <form onsubmit="handleSave(event)" id="f" class="p-6 sm:p-8 overflow-y-auto custom-scrollbar space-y-4 sm:space-y-6 flex-1">
+      <input type="hidden" name="rowId" id="fRow">
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">ประเภทเอกสาร</label>
+          <select name="docType" id="fType" class="w-full p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl font-bold text-slate-700 outline-none" onchange="updateStatusOptions(this.value)">
+            <option value="ใบส่งงาน/สรุปค่าใช้จ่าย">ใบส่งงาน</option>
+            <option value="ใบแจ้งหนี้">ใบแจ้งหนี้</option>
+            <option value="ใบวางบิล">ใบวางบิล</option>
+            <option value="ใบเสร็จรับเงิน/ใบกำกับภาษี">ใบเสร็จ/ใบกำกับ</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">ชื่อลูกค้า</label>
+          <input type="text" name="customer" id="fCustomer" placeholder="ชื่อลูกค้า" required class="w-full p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl font-bold text-blue-600 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">เลขที่เอกสาร</label>
+          <input type="text" name="docNo" placeholder="เลขที่เอกสาร" required class="w-full p-3 sm:p-4 border rounded-xl sm:rounded-2xl font-mono font-bold outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">วันที่</label>
+          <input type="date" name="docDate" id="fDate" required class="w-full p-3 sm:p-4 border rounded-xl sm:rounded-2xl font-bold outline-none text-slate-700">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">สถานะ</label>
+          <select name="status" id="fStatus" class="w-full p-3 sm:p-4 bg-white border-2 border-slate-200 rounded-xl sm:rounded-2xl font-black outline-none"></select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black text-slate-500 uppercase ml-1">จำนวนเงิน</label>
+          <input type="number" step="0.01" name="amount" placeholder="0.00" required class="w-full p-3 sm:p-4 bg-emerald-50 border border-emerald-100 rounded-xl sm:rounded-2xl font-black text-emerald-700 text-right outline-none">
+        </div>
+      </div>
+
+      <div class="space-y-1 pb-4">
+        <label class="text-[10px] font-black text-slate-500 uppercase ml-1">อ้างอิงเลขที่ (Auto-Link)</label>
+        <input type="text" name="reference" placeholder="ระบุเลขที่เอกสารเชื่อมโยง" class="w-full p-3 sm:p-4 bg-blue-50 border border-blue-100 rounded-xl sm:rounded-2xl font-bold text-blue-700 outline-none">
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeModal()" class="flex-1 py-3 sm:py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">ยกเลิก</button>
+        <button type="submit" id="saveBtn" class="flex-[2] py-3 sm:py-4 bg-slate-900 text-white rounded-xl sm:rounded-2xl font-black shadow-lg hover:bg-slate-800 transition-all">บันทึกข้อมูล</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+  <script>
+    Chart.register(ChartDataLabels);
+    const CONFIG = {
+      sheets: ['ใบส่งงาน/สรุปค่าใช้จ่าย', 'ใบแจ้งหนี้', 'ใบวางบิล', 'ใบเสร็จรับเงิน/ใบกำกับภาษี'],
+      status: {
+        'ใบส่งงาน/สรุปค่าใช้จ่าย': ['รอดำเนินการ', 'วางบิล', 'ชำระแล้ว'],
+        'ใบแจ้งหนี้': ['รอดำเนินการ', 'วางบิล', 'ชำระแล้ว'],
+        'ใบวางบิล': ['ค้างชำระ', 'ชำระแล้ว'],
+        'ใบเสร็จรับเงิน/ใบกำกับภาษี': ['ชำระแล้ว']
+      },
+      chartColors: ['#3b82f6', '#10b981', '#fb923c', '#ef4444', '#8b5cf6', '#ec4899', '#f59e0b', '#06b6d4', '#64748b']
+    };
+
+    let charts = { bar: null, donut: null };
+    let fullData = [];
+    let currentFilterValue = '';
+    let currentYearFilter = 'all';
+    let currentMonthFilter = 'all';
+    let currentActiveBtn = null;
+    let globalAccHistory = {}; // 🆕 เก็บประวัติหมายเหตุจากแท็บใหม่
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('sidebar-closed');
+      document.getElementById('overlay').classList.toggle('hidden');
+    // ตรวจสอบสถานะและสลับ Class สำหรับมือถือ
+    if (sidebar.classList.contains('-translate-x-full')) {
+      // เปิด Sidebar
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+  } else {
+    // ปิด Sidebar
+    sidebar.classList.remove('translate-x-0');
+    sidebar.classList.add('-translate-x-full');
+    overlay.classList.add('hidden');
+  }
+}
+
+    window.onload = () => {
+      refreshCustomerList();
+      loadView(document.getElementById('btnAll'), '', 'all');
+    };
+
+    function refreshCustomerList() {
+  google.script.run.withSuccessHandler(list => {
+    // ปรับแต่ง HTML ของปุ่มรายชื่อลูกค้าให้สีชัดเจนขึ้น
+    const html = list.map(name => `
+      <button onclick="loadView(this, '${name}', 'customer')" 
+              class="w-full text-left px-6 py-3 text-sm text-slate-300 hover:text-white hover:bg-white/10 sidebar-btn flex items-center gap-3 truncate transition-all font-medium rounded-xl group">
+        <span class="text-slate-500 group-hover:text-emerald-400 transition-colors">👤</span> 
+        <span class="truncate">${name}</span>
+      </button>
+    `).join('');
+    
+    const container = document.getElementById('customerList');
+    if (container) {
+      // แสดงข้อความเมื่อไม่มีข้อมูลให้ชัดเจนขึ้น
+      container.innerHTML = html || '<div class="px-8 py-4 text-xs text-white/20 italic tracking-widest uppercase">No Customers Found</div>';
+    }
+  }).getAllCustomers();
+}
+function resetHeaderBtn() {
+      const btn = document.getElementById('mainCreateBtn');
+      if(btn) {
+        btn.innerText = '+ สร้างเอกสาร';
+        btn.onclick = () => openForm('ใบส่งงาน/สรุปค่าใช้จ่าย', '');
+      }
+    }
+
+    let isInitialLoaded = false;
+
+function loadView(btn, filterValue, mode) {
+      resetHeaderBtn(); // 🆕 รีเซ็ตปุ่มก่อนเสมอ
+      
+      if (btn) {
+        document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('sidebar-active'));
+        btn.classList.add('sidebar-active');
+      }
+
+      currentMode = mode;
+      currentFilterValue = filterValue;
+      if (btn) currentActiveBtn = btn;
+
+      const titleElement = document.getElementById('pageTitle');
+      if (titleElement) {
+        if (mode === 'all') {
+          titleElement.innerText = "สรุปภาพรวมธุรกิจ";
+        } else if (mode === 'status') {
+          titleElement.innerText = "สถานะเอกสาร: " + filterValue;
+        } else if (mode === 'customer') {
+          titleElement.innerText = "ข้อมูลลูกค้า: " + filterValue;
+        }
+      }
+
+      if (isInitialLoaded) {
+        filterAndRender(filterValue, mode);
+      } else {
+        google.script.run.withSuccessHandler(data => {
+          fullData = data;
+          isInitialLoaded = true;
+          populateYearDropdown();
+          filterAndRender(filterValue, mode);
+        }).getTransactions('');
+      }
+
+      if (window.innerWidth < 1024) {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar.classList.contains('-translate-x-full')) {
+          toggleSidebar();
+        document.getElementById('monthFilter').classList.add('hidden');
+        }
+      }
+    }
+
+    function loadMonthlyReportView(btn) {
+      resetHeaderBtn(); // 🆕 รีเซ็ตปุ่มก่อนเสมอ
+  // 1. จัดการ UI Sidebar
+  if (btn) {
+    document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('sidebar-active'));
+    btn.classList.add('sidebar-active');
+    currentActiveBtn = btn;
+  }
+  currentMode = 'monthlyReport';
+  document.getElementById('pageTitle').innerText = "รายงานประจำเดือน";
+
+  if (window.innerWidth < 1024) toggleSidebar();
+
+  // 2. โชว์ปุ่มเลือกเดือนที่ซ่อนอยู่
+  document.getElementById('monthFilter').classList.remove('hidden');
+
+  // 3. กรองข้อมูลตาม ปี และ เดือน
+  let reportData = fullData;
+  if (currentYearFilter !== 'all') {
+    reportData = reportData.filter(i => i.date && new Date(i.date).getFullYear().toString() === currentYearFilter);
+  }
+  if (currentMonthFilter !== 'all') {
+    reportData = reportData.filter(i => i.date && new Date(i.date).getMonth().toString() === currentMonthFilter);
+  }
+
+  // 4. ล้างหน้าจอ Dashboard เดิมทิ้ง
+  document.getElementById('analytics').innerHTML = '';
+  document.getElementById('kpi-efficiency-section').innerHTML = '';
+  document.getElementById('summaryCards').innerHTML = '';
+  document.getElementById('chartsSection').style.display = 'none';
+
+  // 🆕 5. เพิ่ม 3 คอลัมน์ใหม่ในโครงสร้างตาราง
+  const extraCols = ['เอกสารหัก ณ ที่จ่าย', 'นำส่งบัญชี', 'วันที่นำส่ง'];
+  const docTypes = [
+    { key: 'ใบส่งงาน', name: '1. ใบส่งงาน / สรุปค่าใช้จ่าย', color: 'border-blue-500', text: 'text-blue-600', cols: ['ลูกค้า', 'เลขที่เอกสาร', 'วันที่ออก', 'จำนวนเงิน', 'VAT', 'ยอดรวม', 'สถานะ', ...extraCols] },
+    { key: 'ใบแจ้งหนี้', name: '2. ใบแจ้งหนี้ (Invoice)', color: 'border-amber-500', text: 'text-amber-600', cols: ['ลูกค้า', 'เลขที่เอกสาร', 'อ้างอิง', 'วันที่ออก', 'จำนวนเงิน', 'VAT', 'หัก ณ ที่จ่าย', 'ยอดรวม', 'สถานะ', ...extraCols] },
+    { key: 'ใบวางบิล', name: '3. ใบวางบิล (Billing Note)', color: 'border-rose-500', text: 'text-rose-600', cols: ['ลูกค้า', 'เลขที่เอกสาร', 'อ้างอิง', 'วันที่ออก', 'จำนวนเงิน', 'VAT', 'หัก ณ ที่จ่าย', 'ยอดรวม', 'สถานะ', ...extraCols] },
+    { key: 'ใบเสร็จ', name: '4. ใบเสร็จรับเงิน / ใบกำกับภาษี', color: 'border-emerald-500', text: 'text-emerald-600', cols: ['ลูกค้า', 'เลขที่เอกสาร', 'อ้างอิง', 'วันที่ออก', 'จำนวนเงิน', 'VAT', 'หัก ณ ที่จ่าย', 'ยอดรวม', 'สถานะ', ...extraCols] }
+  ];
+
+  let html = `<div class="space-y-8 animate-in fade-in duration-500 pb-10">`;
+
+  // วนลูปสร้างตารางทั้ง 4 ประเภท
+  docTypes.forEach(dt => {
+    const items = reportData.filter(i => i.type.includes(dt.key));
+    const totalNet = items.reduce((sum, i) => {
+      const amt = i.amount || 0;
+      const vat = i.vat || 0;
+      const wht = i.wht || 0;
+      const rowNet = dt.key === 'ใบส่งงาน' ? (amt + vat) : (i.net || (amt + vat - wht));
+      return sum + rowNet;
+    }, 0);
+
+    html += `
+      <div class="glass-card p-6 lg:p-8 border-t-[6px] ${dt.color} shadow-lg overflow-hidden bg-white">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-6">
+          <div>
+            <h4 class="text-xl font-black text-slate-800 uppercase tracking-widest">${dt.name}</h4>
+            <p class="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest bg-slate-50 inline-block px-3 py-1 rounded-full border border-slate-100">จำนวน ${items.length} รายการ</p>
+          </div>
+          <div class="text-left sm:text-right bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100">
+            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">ยอดรวมสุทธิ</p>
+            <p class="text-2xl lg:text-3xl font-black ${dt.text} amount-font">${totalNet.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200 custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse whitespace-nowrap min-w-[1000px]">
+            <thead class="bg-slate-100 text-slate-500 font-black uppercase text-[10px] tracking-wider">
+              <tr>
+                ${dt.cols.map(c => `<th class="p-4 ${['จำนวนเงิน', 'VAT', 'หัก ณ ที่จ่าย', 'ยอดรวม'].includes(c) ? 'text-right' : (['สถานะ', ...extraCols].includes(c) ? 'text-center' : '')}">${c}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${items.length > 0 ? items.map(i => {
+                const amt = i.amount || 0;
+                const vat = i.vat || 0;
+                const wht = i.wht || 0;
+                const rowNet = dt.key === 'ใบส่งงาน' ? (amt + vat) : (i.net || (amt + vat - wht));
+
+                return `
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-4 font-bold text-slate-700">👤 ${i.customer}</td>
+                  <td class="p-4 font-mono font-bold text-slate-900">${i.docNo}</td>
+                  ${dt.key !== 'ใบส่งงาน' ? `<td class="p-4 font-mono text-slate-500"><span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-[10px]">${i.reference || '-'}</span></td>` : ''}
+                  <td class="p-4 text-slate-600 font-medium">${i.date ? new Date(i.date).toLocaleDateString('th-TH') : '-'}</td>
+                  
+                  <td class="p-4 text-right text-slate-500 font-bold">${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                  <td class="p-4 text-right text-slate-500 font-bold">${vat.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                  
+                  ${dt.key !== 'ใบส่งงาน' ? `<td class="p-4 text-right text-red-500 font-bold">${wht.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>` : ''}
+                  
+                  <td class="p-4 text-right font-black ${dt.text} text-sm">${rowNet.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                  
+                  <td class="p-4 text-center">
+                    <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                      i.status === 'ชำระแล้ว' ? 'bg-green-100 text-green-700' : 
+                      i.status === 'ค้างชำระ' ? 'bg-red-100 text-red-700' : 
+                      'bg-yellow-100 text-yellow-700'
+                    }">
+                      ${i.status || '-'}
+                    </span>
+                  </td>
+                  
+                  <td class="p-4 text-center text-lg">
+                    ${i.docWht ? '<span class="text-emerald-500" title="ได้รับเอกสารแล้ว">✅</span>' : '<span class="text-slate-200" title="ยังไม่ได้รับ">◻️</span>'}
+                  </td>
+                  <td class="p-4 text-center text-lg">
+                    ${i.sendAcc ? '<span class="text-emerald-500" title="นำส่งแล้ว">✅</span>' : '<span class="text-slate-200" title="ยังไม่นำส่ง">◻️</span>'}
+                  </td>
+                  <td class="p-4 text-center text-slate-500 font-bold">
+                    ${i.sendAccDate ? `<span class="bg-slate-100 px-2 py-1 rounded-md text-[10px]">${new Date(i.sendAccDate).toLocaleDateString('th-TH')}</span>` : '-'}
+                  </td>
+                </tr>
+              `}).join('') : `
+                <tr><td colspan="${dt.cols.length}" class="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px] bg-slate-50/50">ไม่มีข้อมูลในเดือน / ปีที่เลือก</td></tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  document.getElementById('tableSection').innerHTML = html;
+}
+
+    function filterAndRender(val, mode) {
+  document.getElementById('chartsSection').style.display = '';
+  
+  let displayData = fullData;
+
+  // 1. กรองตามปีที่เลือกก่อน
+  if (currentYearFilter !== 'all') {
+    displayData = displayData.filter(i => {
+      if (!i.date) return false;
+      return new Date(i.date).getFullYear().toString() === currentYearFilter;
+    });
+  }
+
+  // 2. กรองตาม Mode (เปลี่ยนจาก fullData เป็น displayData เพื่อให้กรองทบกัน)
+  if (mode === 'customer' || mode === 'search') {
+    const q = val.toLowerCase().trim();
+    displayData = displayData.filter(i => 
+      i.customer.toLowerCase().includes(q) || 
+      i.docNo.toLowerCase().includes(q) || 
+      (i.reference && i.reference.toLowerCase().includes(q))
+    );
+  } else if (mode === 'status') {
+    displayData = displayData.filter(i => i.status === val);
+    if (val === 'ชำระแล้ว') {
+      displayData = displayData.filter(i => i.type.includes('ใบเสร็จ'));
+    } else if (val === 'วางบิล') {
+      displayData = displayData.filter(i => i.type.includes('ใบแจ้งหนี้'));
+    }
+  }
+
+  // 3. ส่งข้อมูลที่ผ่านการกรองแล้วทั้ง 2 ชั้นไปแสดงผล
+  renderAnalytics(displayData, mode, val);
+  renderCharts(displayData, mode, val);
+  renderContent(displayData, mode);
+}
+
+    function calculateKPIStats(data) {
+  let totalDays = 0; // เพิ่มบรรทัดนี้
+  let paidCount = 0; // เพิ่มบรรทัดนี้
+  // --- KPI 1: Collection Efficiency ---
+  const totalInvoiced = data.filter(i => i.type.includes('ใบแจ้งหนี้')).reduce((s, i) => s + i.net, 0);
+  const totalPaid = data.filter(i => i.type.includes('ใบเสร็จ') && i.status === 'ชำระแล้ว').reduce((s, i) => s + i.net, 0);
+  const collectionRate = totalInvoiced > 0 ? (totalPaid / totalInvoiced) * 100 : 0;
+  // --- KPI 2: Customer Concentration ---
+  const receipts = data.filter(i => i.type.includes('ใบเสร็จ') && i.status === 'ชำระแล้ว');
+  receipts.forEach(receipt => {
+    // หาใบวางบิลที่ถูกอ้างอิงในใบเสร็จนี้
+    const billingDoc = data.find(d =>
+      d.type.includes('ใบวางบิล') &&
+      d.docNo.toString().trim() === receipt.reference?.toString().trim()
+    );
+
+    if (billingDoc && billingDoc.date && receipt.date) {
+      const bDate = new Date(billingDoc.date);
+      const rDate = new Date(receipt.date);
+      const diffTime = rDate - bDate;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0) { // ป้องกันข้อมูลวันที่ผิดพลาด
+        totalDays += diffDays;
+        paidCount++;
+      }
+    }
+  });
+
+  const avgCollectionDays = paidCount > 0 ? (totalDays / paidCount) : 0;
+  return { collectionRate, avgCollectionDays };
+}
+
+    function renderAnalytics(data, mode, filterValue) {
+  const kpis = calculateKPIStats(data);
+  const stats = { 'ชำระแล้ว': 0, 'ค้างชำระ': 0, 'รอดำเนินการ': 0 };
+  
+  // คำนวณยอดเงินแยกตามสถานะและประเภทเอกสาร
+  data.forEach(i => {
+    if (i.status === 'ชำระแล้ว') {
+      if (i.type.includes('ใบเสร็จ')) stats['ชำระแล้ว'] += i.net;
+    } else if (i.status === 'ค้างชำระ') {
+      if (i.type.includes('ใบวางบิล')) stats['ค้างชำระ'] += i.net;
+    } else if (i.status === 'รอดำเนินการ') {
+      if (i.type.includes('ใบส่งงาน')) stats['รอดำเนินการ'] += i.net;
+    }
+  });
+
+  const grandTotal = stats['ชำระแล้ว'] + stats['ค้างชำระ'] + stats['รอดำเนินการ'];
+  const isSummaryView = (!mode || mode === 'all' || mode === 'customer' || mode === 'search');
+
+  // --- ส่วนที่ 1: ยอดเงิน 3 สถานะ (แสดงที่ด้านบนสุด) ---
+  let moneyHtml = '';
+  if (isSummaryView) {
+    moneyHtml = `
+    <div class="col-span-full grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+  ${Object.entries(stats).map(([k, v], idx) => {
+    const percentage = grandTotal > 0 ? ((v / grandTotal) * 100).toFixed(1) : 0;
+    
+    // กำหนดสีตามสถานะ (Emerald, Red, Amber)
+    const statusConfig = {
+      'ชำระแล้ว': { border: 'border-emerald-500', text: 'text-emerald-600', bg: 'bg-emerald-50/50' },
+      'ค้างชำระ': { border: 'border-red-500', text: 'text-red-600', bg: 'bg-red-50/50' },
+      'รอดำเนินการ': { border: 'border-amber-500', text: 'text-amber-600', bg: 'bg-amber-50/50' }
+    };
+    
+    const style = statusConfig[k] || { border: 'border-slate-500', text: 'text-slate-600', bg: 'bg-slate-50' };
+
+    return `
+    <div class="glass-card p-6 border-t-[6px] ${style.border} flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all">
+      <div class="flex justify-between items-start mb-4">
+        <p class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${k}</p>
+        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold border ${style.border} ${style.text} bg-white shadow-sm">
+          ${percentage}%
+        </span>
+      </div>
+      <div>
+        <h4 class="text-2xl lg:text-3xl font-black tracking-tighter text-slate-900 amount-font leading-none">
+          ${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </h4>
+        <p class="text-[9px] font-medium text-slate-400 mt-2 uppercase tracking-tighter">Total Net Amount</p>
+      </div>
+    </div>`;
+  }).join('')}
+</div>`;
+  } else {
+    // กรณีเลือกกรองสถานะเฉพาะอย่าง (Full Width)
+    const currentVal = stats[filterValue] || 0;
+    const color = filterValue === 'ชำระแล้ว' ? 'border-emerald-500' : filterValue === 'ค้างชำระ' ? 'border-red-500' : 'border-orange-400';
+    moneyHtml = `
+      <div class="col-span-full glass-card p-6 border-l-[16px] ${color} flex justify-between items-center animate-in slide-in-from-left">
+        <div>
+          <p class="text-xs font-black text-slate-400 uppercase">ยอดรวม${filterValue}</p>
+          <h4 class="text-3xl lg:text-5xl amount-font mt-2 text-slate-900">${currentVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
+        </div>
+        <div class="text-right">
+          <p class="text-xs font-black text-slate-400 uppercase">จำนวนเอกสาร</p>
+          <p class="text-4xl font-black text-slate-700">${data.length}</p>
+        </div>
+      </div>`;
+  }
+
+  // --- ส่วนที่ 2: KPI Efficiency (แสดงต่อท้ายกราฟ) ---
+  const kpiHtml = `
+  <div class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+    
+    <div class="glass-card p-6 border-l-[12px] border-blue-600 shadow-sm flex flex-col justify-center bg-white min-h-[150px] relative overflow-hidden group hover:shadow-md transition-all">
+      <div class="absolute right-6 top-6 text-blue-100 group-hover:text-blue-200 transition-colors">
+        <svg class="w-14 h-14" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M11.8 2.02c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm1 15h-2v-2h2v2zm0-4.5h-2V7h2v5.5z"/>
+        </svg>
+      </div>
+      
+      <p class="text-[11px] font-black text-blue-800 uppercase tracking-[0.2em] mb-3 opacity-70">อัตราการเรียกเก็บ</p>
+      <div class="flex items-baseline gap-2">
+        <h4 class="text-4xl lg:text-5xl font-black text-blue-600 tracking-tighter amount-font">
+          ${kpis.collectionRate.toFixed(2)}
+        </h4>
+        <span class="text-xl font-bold text-blue-400">%</span>
+      </div>
+      <p class="text-[9px] font-medium text-slate-400 mt-2 uppercase">Collection Efficiency</p>
+    </div>
+
+    <div class="glass-card p-6 border-l-[12px] border-purple-600 shadow-sm flex flex-col justify-center bg-white min-h-[150px] relative overflow-hidden group hover:shadow-md transition-all">
+      <div class="absolute right-6 top-6 text-purple-100 group-hover:text-purple-200 transition-colors">
+        <svg class="w-14 h-14" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+        </svg>
+      </div>
+
+      <p class="text-[11px] font-black text-purple-800 uppercase tracking-[0.2em] mb-3 opacity-70">ระยะเวลาเรียกเก็บเฉลี่ย</p>
+      <div class="flex items-baseline gap-2">
+        <h4 class="text-4xl lg:text-5xl font-black text-purple-600 tracking-tighter amount-font">
+          ${kpis.avgCollectionDays.toFixed(1)}
+        </h4>
+        <span class="text-xl font-bold text-purple-400">วัน</span>
+      </div>
+      <p class="text-[9px] font-medium text-slate-400 mt-2 uppercase">Avg. Payment Cycle</p>
+    </div>
+
+  </div>`;
+
+  // --- การสั่ง Render ลงหน้าจอ ---
+  document.getElementById('analytics').innerHTML = moneyHtml;
+  
+  const kpiSection = document.getElementById('kpi-efficiency-section');
+  if (kpiSection) {
+    kpiSection.innerHTML = isSummaryView ? kpiHtml : '';
+    // กำหนดโครงสร้าง Container หลักให้ขยายเต็มความกว้าง
+    kpiSection.className = "w-full block"; 
+    kpiSection.style.display = isSummaryView ? "block" : "none";
+  }
+}
+
+    function renderCharts(data, mode, filterValue) {
+  const isSummary = (!mode || mode === 'all'); // เช็คว่าเป็นหน้าภาพรวมบริษัทหรือไม่
+  const labels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const statusList = ['ชำระแล้ว', 'ค้างชำระ', 'รอดำเนินการ'];
+  const statusColors = { 'ชำระแล้ว': '#10b981', 'ค้างชำระ': '#ef4444', 'รอดำเนินการ': '#fb923c' };
+
+  // --- ส่วนที่ 1: เตรียมข้อมูลสำหรับกราฟแท่งรายเดือน (Bar Chart ด้านซ้าย) ---
+  let barDatasets = statusList.map(status => {
+    const monthlyAmounts = Array(12).fill(0);
+    data.forEach(i => {
+      if (i.status === status && i.date) {
+        // เงื่อนไขพิเศษสำหรับ "ชำระแล้ว" ให้ดึงเฉพาะใบเสร็จ
+        if (status === 'ชำระแล้ว' && !i.type.includes('ใบเสร็จ')) return;
+        monthlyAmounts[new Date(i.date).getMonth()] += i.net;
+      }
+    });
+    return {
+      label: status,
+      data: monthlyAmounts,
+      backgroundColor: statusColors[status],
+      borderRadius: 4,
+      barPercentage: 0.8,
+      categoryPercentage: 0.7
+    };
+  });
+
+  if (isSummary) {
+    document.getElementById('barChartTitle').innerHTML = '<span class="w-3 h-3 bg-emerald-500 rounded-full shadow-sm"></span> รายได้รายเดือนแยกตามสถานะ (ภาพรวม)';
+  } else {
+    document.getElementById('barChartTitle').innerHTML = `<span class="w-3 h-3 bg-blue-500 rounded-full shadow-sm"></span> รายได้รายเดือน: ${filterValue}`;
+  }
+
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: barDatasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { family: 'Kanit', size: 11 } } },
+        datalabels: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // --- ส่วนที่ 2: เตรียมข้อมูลสำหรับกราฟสรุปสถานะ/สัดส่วนลูกค้า (Horizontal Bar ด้านขวา) ---
+  if (charts.donut) charts.donut.destroy();
+
+let rightChartDatasets = [];
+let rightChartLabels = [];
+let chartType = 'bar'; // กำหนดค่าเริ่มต้นเป็น bar (กราฟแท่ง)
+let indexAxisSetting = 'y'; // กราฟแท่งแนวนอนสำหรับโหมดปกติ
+
+// ตรวจสอบโหมดการแสดงผล
+const isCustomerMode = (mode === 'customer' || mode === 'search');
+
+if (isSummary) {
+  // --- 1. โหมดภาพรวมบริษัท (Grouped Bar) ---
+  chartType = 'bar';
+  indexAxisSetting = 'y';
+  rightChartLabels = statusList;
+  const customers = [...new Set(data.map(i => i.customer))].filter(c => c);
+  rightChartDatasets = customers.map((cust, idx) => ({
+    label: cust,
+    data: statusList.map(s => data.filter(i => i.customer === cust && i.status === s && (s === 'ชำระแล้ว' ? i.type.includes('ใบเสร็จ') : s === 'ค้างชำระ' ? i.type.includes('ใบวางบิล') : i.type.includes('ใบส่งงาน'))).reduce((sum, item) => sum + item.net, 0)),
+    backgroundColor: `hsla(${(idx * 45) % 360}, 65%, 55%, 0.8)`,
+    borderRadius: 4
+  }));
+  document.getElementById('donutChartTitle').innerHTML = '📊 ยอดเงินแยกตามสถานะและรายชื่อลูกค้า (เจาะจงประเภทเอกสาร)';
+
+} else if (mode === 'status') {
+  // --- 2. โหมด Document Status (Horizontal Bar เหมือนเดิม) ---
+  chartType = 'bar';
+  indexAxisSetting = 'y';
+  rightChartLabels = [...new Set(data.map(i => i.customer))].filter(c => c);
+  const customerTotals = rightChartLabels.map(cust => {
+    return data.filter(i => i.customer === cust).reduce((sum, item) => sum + item.net, 0);
+  });
+  rightChartDatasets = [{
+    label: 'ยอดเงินรวม',
+    data: customerTotals,
+    backgroundColor: rightChartLabels.map((_, idx) => CONFIG.chartColors[idx % CONFIG.chartColors.length]),
+    borderRadius: 8,
+    barThickness: 30
+  }];
+  document.getElementById('donutChartTitle').innerHTML = `📊 สัดส่วนยอดเงินแยกตามลูกค้าในกลุ่ม: ${filterValue}`;
+
+} else if (isCustomerMode) {
+  // --- 3. โหมดค้นหาหรือเลือกลูกค้า (เปลี่ยนเป็น Line Chart ตามยอดใบเสร็จ) ---
+  chartType = 'line';
+  indexAxisSetting = 'x'; // กราฟเส้นแนวตั้งปกติ
+  rightChartLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  
+  const monthlyReceipts = Array(12).fill(0);
+  data.forEach(i => {
+    if (i.type.includes('ใบเสร็จ') && i.status === 'ชำระแล้ว' && i.date) {
+      const month = new Date(i.date).getMonth();
+      monthlyReceipts[month] += i.net;
+    }
+  });
+
+  rightChartDatasets = [{
+    label: 'ยอดชำระเงินรายเดือน (ใบเสร็จ)',
+    data: monthlyReceipts,
+    borderColor: '#10b981',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    fill: true,
+    tension: 0.4,
+    pointRadius: 4
+  }];
+  document.getElementById('donutChartTitle').innerHTML = `📈 แนวโน้มการชำระเงินรายเดือน: ${filterValue}`;
+}
+
+// สร้างกราฟด้วยค่า Config ที่คำนวณตามเงื่อนไข
+charts.donut = new Chart(document.getElementById('donutChart').getContext('2d'), {
+  type: chartType,
+  data: {
+    labels: rightChartLabels,
+    datasets: rightChartDatasets
+  },
+  options: {
+    indexAxis: indexAxisSetting,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: (isSummary || isCustomerMode),
+        position: 'bottom',
+        labels: { font: { family: 'Kanit', weight: '800' } }
+      },
+      datalabels: {
+        display: true,
+        anchor: isCustomerMode ? 'center' : 'end',
+        align: isCustomerMode ? 'top' : 'right',
+        offset: isCustomerMode ? 0 : 8,
+        font: { family: 'Kanit', weight: '900', size: 10 },
+        formatter: (v) => v > 0 ? v.toLocaleString() : ''
+      }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
+    }
+  }
+});
+}
+    // --- เมนูการเติบโต (GROWTH VIEW) ---
+    // --- เมนูการเติบโต (GROWTH VIEW) ---
+    function loadGrowthView(btn) {
+      resetHeaderBtn(); // 🆕 รีเซ็ตปุ่มก่อนเสมอ
+      currentMode = 'growth';
+      currentActiveBtn = btn;
+      document.getElementById('chartsSection').style.display = '';
+      // 1. จัดการ UI Sidebar
+      document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('sidebar-active'));
+      btn.classList.add('sidebar-active');
+      document.getElementById('pageTitle').innerText = "วิเคราะห์การเติบโตของบริษัท";
+
+      if (window.innerWidth < 1024) toggleSidebar();
+
+      // 2. ประมวลผลข้อมูลรายปีแยกตามลูกค้า
+      const customerYearlyData = {};
+      fullData.forEach(i => {
+        if (i.date && i.status === 'ชำระแล้ว' && i.type.includes('ใบเสร็จ')) {
+          const year = new Date(i.date).getFullYear();
+          // 🛡️ ดักจับ NaN ที่ต้นทาง: รับเฉพาะปีที่เป็นตัวเลขจริงๆ
+          if (!isNaN(year)) {
+            if (!customerYearlyData[i.customer]) customerYearlyData[i.customer] = {};
+            customerYearlyData[i.customer][year] = (customerYearlyData[i.customer][year] || 0) + i.net;
+          }
+        }
+      });
+
+      // 🛡️ ดักจับ NaN ในอาเรย์ years: กรองเฉพาะปีที่แปลงเป็นตัวเลขได้
+      const years = [...new Set(
+        fullData
+          .filter(i => i.date)
+          .map(i => new Date(i.date).getFullYear())
+          .filter(y => !isNaN(y)) // <--- จุดสำคัญที่กำจัด NaN
+      )].sort();
+      
+      const customers = Object.keys(customerYearlyData);
+      const yearlyTotal = years.map(y => customers.reduce((sum, c) => sum + (customerYearlyData[c][y] || 0), 0));
+
+      // 3. แสดงการ์ดสรุปรายได้รายปี (Grid 3 คอลัมน์)
+      document.getElementById('analytics').innerHTML = `
+        <div class="col-span-full grid grid-cols-1 md:grid-cols-3 gap-6">
+          ${years.map((y, i) => {
+            const prevYearTotal = yearlyTotal[i-1] || 0;
+            const growth = prevYearTotal > 0 ? ((yearlyTotal[i] - prevYearTotal) / prevYearTotal * 100).toFixed(1) : 0;
+            
+            return `
+            <div class="glass-card p-6 border-t-[6px] border-emerald-500 shadow-sm relative overflow-hidden">
+              <div class="flex justify-between items-start mb-4">
+                 <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest">รายได้ปี ${y}</p>
+                 ${i > 0 ? `<span class="px-2 py-1 rounded-lg text-[10px] font-bold border ${growth >= 0 ? 'text-emerald-600 border-emerald-100 bg-emerald-50' : 'text-red-600 border-red-100 bg-red-50'}">${growth >= 0 ? '▲' : '▼'} ${Math.abs(growth)}%</span>` : ''}
+              </div>
+              <h4 class="text-3xl font-black amount-font tracking-tighter text-slate-800 leading-none">
+                ${yearlyTotal[i].toLocaleString(undefined, {minimumFractionDigits: 2})}
+              </h4>
+              <div class="absolute -right-4 -bottom-4 text-6xl opacity-5 font-black text-slate-900 italic">${y}</div>
+            </div>`;
+          }).reverse().join('')}
+        </div>`;
+
+      // 4. สร้างตารางเปรียบเทียบการเติบโตรายลูกค้า
+      let tableHtml = `
+        <div class="glass-card p-6 lg:p-8 mt-8 border border-slate-100 overflow-hidden">
+          <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <span class="w-3 h-3 bg-blue-500 rounded-full"></span> ตารางเปรียบเทียบการเติบโตแยกตามรายลูกค้า
+          </h4>
+          <div class="overflow-x-auto rounded-2xl border border-slate-50">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-50 text-slate-400 font-black uppercase text-[10px]">
+                <tr>
+                  <th class="p-4">รายชื่อลูกค้า</th>
+                  ${years.map(y => `<th class="p-4 text-right">ปี ${y}</th>`).join('')}
+                  <th class="p-4 text-center">แนวโน้ม</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${customers.map(cust => {
+                  const currentYearTotal = customerYearlyData[cust][years[years.length-1]] || 0;
+                  const prevYearTotal = customerYearlyData[cust][years[years.length-2]] || 0;
+                  const trend = currentYearTotal >= prevYearTotal ? '📈' : '📉';
+
+                  return `
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-4 font-bold text-slate-700">👤 ${cust}</td>
+                    ${years.map(y => `
+                      <td class="p-4 text-right font-mono font-bold text-slate-900">
+                        ${(customerYearlyData[cust][y] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                      </td>
+                    `).join('')}
+                    <td class="p-4 text-center text-xl">${trend}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+
+      document.getElementById('summaryCards').innerHTML = "";
+      document.getElementById('tableSection').innerHTML = tableHtml;
+
+      // 5. อัปเดตกราฟให้สวยงามขึ้น
+      if (charts.bar) charts.bar.destroy();
+      charts.bar = new Chart(document.getElementById('barChart').getContext('2d'), {
+        type: 'bar',
+        data: { 
+          labels: years, 
+          datasets: [{ 
+            label: 'รายได้รวมรายปี', 
+            data: yearlyTotal, 
+            backgroundColor: '#10b981', 
+            borderRadius: 12,
+            barThickness: 40
+          }] 
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { grid: { color: 'rgba(0,0,0,0.03)' } } }
+        }
+      });
+
+      // กราฟ % การเติบโตแบบ Line Chart
+      const growthDatasets = customers.map((cust, idx) => {
+        const growthData = years.map((y, i) => {
+          if (i === 0) return 0;
+          const prev = customerYearlyData[cust][years[i - 1]] || 0;
+          const curr = customerYearlyData[cust][y] || 0;
+          return prev > 0 ? ((curr - prev) / prev * 100) : 0;
+        });
+        return {
+          label: cust,
+          data: growthData,
+          borderColor: CONFIG.chartColors[idx % CONFIG.chartColors.length],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          borderWidth: 3
+        };
+      });
+
+      if (charts.donut) charts.donut.destroy();
+      charts.donut = new Chart(document.getElementById('donutChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: years, datasets: growthDatasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Kanit', size: 10 } } }
+          },
+          scales: {
+            y: {
+              ticks: { callback: v => v + '%' },
+              grid: { color: 'rgba(0,0,0,0.03)' }
+            }
+          }
+        }
+      });
+
+      document.getElementById('barChartTitle').innerText = "📊 รายได้รายปีสะสม (Total Revenue by Year)";
+      document.getElementById('donutChartTitle').innerText = "📈 % การเติบโตรายลูกค้า (Growth Percentage)";
+      document.getElementById('monthFilter').classList.add('hidden');
+    }
+
+    function getFullReferencePath(initialRef) {
+      if (!initialRef || initialRef === '-') return [];
+      let path = [];
+      let currentRef = initialRef.trim().toUpperCase();
+      let safetyLoop = 0;
+
+      while (currentRef && safetyLoop < 5) {
+        path.push(currentRef);
+        const linkedDoc = fullData.find(d => d.docNo && d.docNo.toString().trim().toUpperCase() === currentRef);
+        if (linkedDoc && linkedDoc.reference && linkedDoc.reference !== '-') {
+          currentRef = linkedDoc.reference.trim().toUpperCase();
+        } else {
+          currentRef = null;
+        }
+        safetyLoop++;
+      }
+      return path;
+    }
+
+function renderContent(data, mode) {
+  const isOverview = (mode === 'all' || mode === '');
+  const summaryCardsContainer = document.getElementById('summaryCards');
+  const tableSectionContainer = document.getElementById('tableSection');
+
+  if (isOverview) {
+    // --- 1. เตรียมข้อมูลลูกหนี้ (Top 5 & Overdue) ---
+    const today = new Date();
+    const activeDebtors = data.filter(i => {
+      if (i.status !== 'ค้างชำระ') return false;
+      const isAlreadyPaid = data.some(d => 
+        d.reference?.toString().trim() === i.docNo?.toString().trim() && 
+        d.status === 'ชำระแล้ว'
+      );
+      return !isAlreadyPaid;
+    });
+
+    const allDebtorMap = activeDebtors.reduce((acc, curr) => {
+      acc[curr.customer] = (acc[curr.customer] || 0) + curr.net;
+      return acc;
+    }, {});
+    const top5Debtors = Object.entries(allDebtorMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const overdueMap = activeDebtors.filter(i => {
+      if (!i.date) return false;
+      const diffDays = Math.ceil((today - new Date(i.date)) / (1000 * 60 * 60 * 24));
+      return diffDays > 30;
+    }).reduce((acc, curr) => {
+      acc[curr.customer] = (acc[curr.customer] || 0) + curr.net;
+      return acc;
+    }, {});
+    const topOverdue = Object.entries(overdueMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    // --- 2. ส่วนแสดงผล Urgent Debt Collection ---
+    let html = '';
+    if (top5Debtors.length > 0 || topOverdue.length > 0) {
+      html += `
+        <div class="col-span-full glass-card p-6 lg:p-8 border-l-[16px] border-red-600 mb-8 fade-in-up shadow-xl bg-gradient-to-br from-white to-red-50/20">
+          <div class="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-red-100 pb-6 gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-200 animate-pulse">
+                <span class="text-3xl text-white">🚨</span>
+              </div>
+              <div>
+                <h3 class="font-black text-red-600 text-xl lg:text-2xl uppercase tracking-widest">รายการลูกหนี้ค้างชำระ</h3>
+                <p class="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">โปรดตรวจสอบและติดตามทวงถามตามลำดับความสำคัญ</p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+               <span class="px-4 py-2 bg-red-100 text-red-700 text-[10px] font-black rounded-xl border border-red-200">ACTION REQUIRED</span>
+            </div>
+          </div>
+          <div class="space-y-10">
+            <div>
+              <h4 class="text-[11px] font-black text-slate-700 mb-5 flex items-center gap-2 uppercase tracking-widest">
+                <span class="w-2 h-4 bg-slate-800 rounded-full"></span> 5 อันดับลูกหนี้ค้างชำระรวมสูงสุด
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                ${top5Debtors.map(([name, amount], index) => `
+                  <div class="p-5 rounded-3xl bg-white border border-slate-100 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                    <div class="absolute -right-2 -top-2 w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-xs font-black text-slate-300 group-hover:bg-red-50 group-hover:text-red-300 transition-colors">
+                      ${index + 1}
+                    </div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase truncate mb-2 pr-6" title="${name}">👤 ${name}</p>
+                    <p class="text-xl font-black text-slate-800 amount-font leading-none">${amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <div class="w-full h-1 bg-slate-100 mt-4 rounded-full overflow-hidden">
+                      <div class="h-full bg-red-500" style="width: ${((amount / top5Debtors[0][1]) * 100).toFixed(0)}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            ${topOverdue.length > 0 ? `
+            <div>
+              <h4 class="text-[11px] font-black text-red-600 mb-5 flex items-center gap-2 uppercase tracking-widest">
+                <span class="w-2 h-4 bg-red-600 rounded-full animate-bounce"></span> รายการค้างชำระเกิน 30 วัน (Overdue)
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                ${topOverdue.map(([name, amount], index) => `
+                  <div class="p-5 rounded-3xl bg-red-600 text-white shadow-lg shadow-red-100 relative overflow-hidden group hover:scale-[1.03] transition-all cursor-pointer" onclick="loadView(null, '${name}', 'customer')">
+                    <p class="text-[9px] font-bold uppercase opacity-70 mb-1 truncate" title="${name}">${name}</p>
+                    <p class="text-xl font-black amount-font leading-none">${amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <div class="mt-4 flex justify-between items-center text-[8px] font-black uppercase tracking-tighter">
+                      <span>URGENT CALL</span>
+                      <span class="bg-white/20 px-2 py-0.5 rounded-md">VIEW INFO →</span>
+                    </div>
+                    <div class="absolute -right-4 -bottom-4 text-6xl opacity-10 font-black italic">${index + 1}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    // ❌ (ลบส่วนที่ 3 การ์ด 4 ใบออกไปเรียบร้อยแล้ว)
+
+    // --- 4. โค้ดตรวจสอบและดึงรายการชำระเงินข้ามปี ---
+    const crossYearItems = [];
+    
+    // ดึงเฉพาะใบเสร็จที่มีการชำระแล้วจาก fullData
+    const receipts = fullData.filter(i => i.type.includes('ใบเสร็จ') && i.status === 'ชำระแล้ว' && i.date);
+
+    receipts.forEach(receipt => {
+      const paidYear = new Date(receipt.date).getFullYear();
+      let currentRef = receipt.reference?.toString().trim();
+      let invoiceDoc = null;
+      let safety = 0;
+      
+      // ลอจิกค้นหาย้อนกลับ
+      while (currentRef && currentRef !== '-' && safety < 5) {
+        let linkedDoc = fullData.find(d => d.docNo?.toString().trim() === currentRef);
+        if (!linkedDoc) break;
+        
+        if (linkedDoc.type.includes('ใบแจ้งหนี้') || linkedDoc.type.includes('ใบส่งงาน')) {
+           invoiceDoc = linkedDoc;
+           break;
+        }
+        currentRef = linkedDoc.reference?.toString().trim();
+        safety++;
+      }
+      
+      // ตรวจสอบปีที่ออกเอกสาร เปรียบเทียบกับ ปีที่ชำระเงิน
+      if (invoiceDoc && invoiceDoc.date) {
+        const issueYear = new Date(invoiceDoc.date).getFullYear();
+        if (paidYear > issueYear) { 
+           crossYearItems.push({
+              customer: receipt.customer,
+              invoiceNo: invoiceDoc.docNo,
+              issueDate: invoiceDoc.date,
+              issueYear: issueYear,
+              receiptNo: receipt.docNo,
+              paidDate: receipt.date,
+              paidYear: paidYear,
+              net: receipt.net
+           });
+        }
+      }
+    });
+
+    let crossYearHtml = '';
+    if (crossYearItems.length > 0) {
+      
+      // 🆕 จัดกลุ่มข้อมูลแยกตาม "ปีที่ชำระเงิน" (paidYear)
+      const groupedByYear = {};
+      crossYearItems.forEach(item => {
+        if (!groupedByYear[item.paidYear]) groupedByYear[item.paidYear] = [];
+        groupedByYear[item.paidYear].push(item);
+      });
+
+      // เรียงปีจากล่าสุดไปหาอดีต (เช่น 2026 ขึ้นก่อน 2025)
+      const sortedYears = Object.keys(groupedByYear).sort((a, b) => b - a);
+
+      // สร้าง Container หุ้มการ์ดรายปีทั้งหมด
+      crossYearHtml = `<div class="col-span-full space-y-8 mt-8">`;
+
+      // 🆕 วนลูปสร้างการ์ดตารางสำหรับแต่ละปี
+      sortedYears.forEach(year => {
+        const yearItems = groupedByYear[year];
+        yearItems.sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate)); // เรียงวันที่ในตาราง
+        const yearTotal = yearItems.reduce((sum, item) => sum + item.net, 0);
+
+        crossYearHtml += `
+          <div class="glass-card p-6 lg:p-8 border-t-[6px] border-purple-500 shadow-xl fade-in-up bg-gradient-to-br from-white to-purple-50/10">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-6">
+              <div class="flex items-center gap-4">
+                <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-3xl shadow-inner">
+                  📆
+                </div>
+                <div>
+                  <h3 class="font-black text-purple-800 text-xl lg:text-2xl tracking-tight uppercase">รายการชำระเงินข้ามปี (รับเงินปี ${year})</h3>
+                  <p class="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">ใบแจ้งหนี้ที่ออกในปีก่อนหน้า แต่ได้รับชำระในปี ${year}</p>
+                </div>
+              </div>
+              <div class="bg-purple-50 px-4 py-2 rounded-xl border border-purple-100 text-center">
+                <p class="text-[9px] font-black text-purple-400 uppercase tracking-widest">รวมมูลค่าข้ามปี ${year}</p>
+                <p class="text-xl font-black text-purple-700 amount-font">
+                  ${yearTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </p>
+              </div>
+            </div>
+            
+            <div class="overflow-x-auto rounded-2xl border border-slate-50 custom-scrollbar">
+              <table class="w-full text-left text-xs border-collapse min-w-[800px]">
+                <thead class="bg-purple-50 text-purple-600 font-black uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th class="p-4 rounded-tl-xl">รายชื่อลูกค้า</th>
+                    <th class="p-4">ต้นทาง (ใบแจ้งหนี้)</th>
+                    <th class="p-4">วันที่ออกเอกสาร</th>
+                    <th class="p-4">ปลายทาง (ใบเสร็จ)</th>
+                    <th class="p-4">วันที่ชำระเงิน</th>
+                    <th class="p-4 text-center">ไทม์ไลน์</th>
+                    <th class="p-4 text-right rounded-tr-xl">ยอดสุทธิ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 bg-white">
+                  ${yearItems.map(item => `
+                    <tr class="hover:bg-slate-50 transition-colors group">
+                      <td class="p-4 font-bold text-slate-700">👤 ${item.customer}</td>
+                      <td class="p-4 font-mono font-bold text-slate-500">${item.invoiceNo}</td>
+                      <td class="p-4 text-slate-600">
+                        <span class="px-2 py-1 bg-slate-100 rounded-md font-bold text-[10px]">${new Date(item.issueDate).toLocaleDateString('th-TH')}</span>
+                      </td>
+                      <td class="p-4 font-mono font-black text-emerald-600">${item.receiptNo}</td>
+                      <td class="p-4 text-slate-600">
+                        <span class="px-2 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-md font-bold text-[10px]">${new Date(item.paidDate).toLocaleDateString('th-TH')}</span>
+                      </td>
+                      <td class="p-4">
+                        <div class="flex items-center justify-center gap-2">
+                          <span class="px-2 py-1 bg-slate-100 text-slate-500 rounded-md font-black text-[9px]">ปี ${item.issueYear}</span>
+                          <span class="text-slate-300">→</span>
+                          <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded-md font-black text-[9px]">ปี ${item.paidYear}</span>
+                        </div>
+                      </td>
+                      <td class="p-4 text-right font-black text-slate-800 text-sm amount-font">
+                        ${item.net.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      });
+      
+      crossYearHtml += `</div>`; // ปิด Container หลัก
+    }
+    
+    // --- สั่ง Render ลง Container (รวม HTML) ---
+    summaryCardsContainer.innerHTML = html + crossYearHtml;
+    tableSectionContainer.innerHTML = "";
+
+  } else {
+    // === 5. หน้าลูกค้ารายบุคคล/ค้นหา ===
+    summaryCardsContainer.innerHTML = "";
+    const validData = data.filter(i => i.net > 0 && i.type !== 'Logo');
+    const customers = [...new Set(validData.map(i => i.customer))];
+    let customerHtml = "";
+
+    customers.forEach(cust => {
+      const custItems = validData.filter(i => i.customer === cust);
+      
+      // 🆕 แก้ยอดเงินเบิ้ล: ให้บวกยอดรวมของลูกค้าเฉพาะบรรทัดที่ไม่ซ้ำกัน
+      const uniqueRows = new Set();
+      let jobSummaryTotal = 0;
+      custItems.forEach(i => {
+        if (!uniqueRows.has(i.rowId)) {
+          jobSummaryTotal += (Number(i.net) || 0);
+          uniqueRows.add(i.rowId);
+        }
+      });
+
+      const custInvoiced = custItems.filter(i => i.type.includes('ใบแจ้งหนี้')).reduce((s, i) => s + i.net, 0);
+      const custPaid = custItems.filter(i => i.type.includes('ใบเสร็จ') && i.status === 'ชำระแล้ว').reduce((s, i) => s + i.net, 0);
+      const custCollectionRate = custInvoiced > 0 ? (custPaid / custInvoiced) * 100 : 0;
+
+      const groupedByType = {};
+      custItems.forEach(item => {
+        if (!groupedByType[item.type]) groupedByType[item.type] = [];
+        groupedByType[item.type].push(item);
+      });
+
+      customerHtml += `
+        <div class="glass-card overflow-hidden mt-8 border-none shadow-xl fade-in-up bg-white">
+          <div class="px-8 py-6 bg-slate-900 text-white flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl">👤</div>
+                <h3 class="font-black text-2xl tracking-tight">${cust}</h3>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 bg-white/10 rounded-lg text-[10px] font-bold border border-white/20 uppercase">Collection: ${custCollectionRate.toFixed(1)}%</span>
+              </div>
+            </div>
+            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 min-w-[240px]">
+              <p class="text-[10px] font-bold text-white/50 uppercase tracking-[0.2em] mb-1">ยอดรวมหลัง Vat7%</p>
+              <p class="text-3xl font-black amount-font tracking-tighter text-emerald-400">${jobSummaryTotal.toLocaleString(undefined,{minimumFractionDigits:2})}</p>
+            </div>
+          </div>
+          <div class="p-8 space-y-10">
+            ${Object.entries(groupedByType).map(([type, items]) => `
+              <div class="space-y-4">
+                <div class="flex items-center gap-3 border-b border-slate-100 pb-2">
+                  <span class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs">📄</span>
+                  <h5 class="text-sm font-black text-slate-800 uppercase tracking-widest">${type} (${items.length})</h5>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-slate-100">
+                  <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th class="p-4">เลขที่เอกสาร</th>
+                        <th class="p-4">ลำดับการอ้างอิง</th>
+                        <th class="p-4 text-right">จำนวนเงิน</th>
+                        <th class="p-4 text-right">ภาษีมูลค่าเพิ่ม</th>
+                        <th class="p-4 text-right">หัก ณ ที่จ่าย</th>
+                        <th class="p-4 text-right">ยอดสุทธิ</th>
+                        <th class="p-4 text-center">สถานะ</th>
+                        <th class="p-4 text-center">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+  ${items.map(i => {
+    const refPath = typeof getFullReferencePath === 'function' ? getFullReferencePath(i.reference) : [];
+    return `
+    <tr class="hover:bg-slate-50 transition-colors">
+      <td class="p-4 font-bold text-slate-900 font-mono text-sm">${i.docNo}</td>
+      
+      <td class="p-4">
+        <div class="flex flex-wrap items-center gap-1">
+          ${refPath.length > 0 ? refPath.map((ref, idx) => `<span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold text-[9px]">${ref}</span>${idx < refPath.length - 1 ? '→' : ''}`).join('') : '-'}
+        </div>
+      </td>
+
+      <td class="p-4 text-right text-slate-600 font-medium">
+        ${i.amount ? i.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : '0.00'}
+      </td>
+
+      <td class="p-4 text-right text-slate-600 font-medium">
+        ${i.vat ? i.vat.toLocaleString(undefined, {minimumFractionDigits: 2}) : '0.00'}
+      </td>
+
+      <td class="p-4 text-right text-red-500 font-medium">
+        ${i.wht ? i.wht.toLocaleString(undefined, {minimumFractionDigits: 2}) : '0.00'}
+      </td>
+
+      <td class="p-4 text-right font-black text-slate-900 text-sm">
+        ${i.net.toLocaleString(undefined, {minimumFractionDigits: 2})}
+      </td>
+
+      <td class="p-4 text-center">
+  <span class="
+    px-3 py-1 rounded-full text-[10px] font-bold uppercase
+    ${i.status === 'ชำระแล้ว'
+      ? 'bg-green-100 text-green-700'
+      : i.status === 'ค้างชำระ'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-yellow-100 text-yellow-700'}
+  ">
+    ${i.status || '-'}
+  </span>
+</td>
+
+<td class="p-4 text-center">
+  <button onclick='editItem(${JSON.stringify(i)})' class="bg-slate-100 hover:bg-slate-900 hover:text-white px-4 py-2 rounded-xl font-bold transition-all text-[10px]">
+    แก้ไข
+  </button>
+</td>
+    </tr>`}).join('')}
+</tbody>
+                  </table>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    });
+    tableSectionContainer.innerHTML = customerHtml;
+  }
+}
+    let searchTimer;
+    function searchTable(query) {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        const q = query.toLowerCase().trim();
+        if (!q) { 
+          loadView(document.getElementById('btnAll'), '', 'all'); 
+          return; 
+        }
+        filterAndRender(q, 'search');
+      }, 300);
+    }
+
+    function updateStatusOptions(type) {
+      document.getElementById('fStatus').innerHTML = CONFIG.status[type].map(s => `<option value="${s}">${s}</option>`).join('');
+    }
+
+    function openForm(type, cust) {
+      document.getElementById('f').reset();
+      document.getElementById('fType').value = type;
+      document.getElementById('fCustomer').value = cust;
+      document.getElementById('fRow').value = "";
+      updateStatusOptions(type);
+      document.getElementById('fDate').valueAsDate = new Date();
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function editItem(i) {
+      document.getElementById('fRow').value = i.rowId;
+      document.getElementById('fType').value = i.type;
+      document.getElementById('fCustomer').value = i.customer;
+      document.getElementById('f').docNo.value = i.docNo;
+      document.getElementById('f').amount.value = i.amount;
+      document.getElementById('f').reference.value = i.reference || '';
+      updateStatusOptions(i.type);
+      document.getElementById('fStatus').value = i.status;
+      
+      // 🆕 แก้ไขให้รองรับวันที่อย่างถูกต้อง
+      if (i.date) {
+        document.getElementById('fDate').value = i.date.toString().substring(0, 10);
+      }
+      
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+    function handleSave(e) {
+      e.preventDefault();
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.innerHTML = `กำลังบันทึก...`;
+      const fd = Object.fromEntries(new FormData(document.getElementById('f')));
+      google.script.run.withSuccessHandler((msg) => {
+        alert(msg);
+        closeModal();
+        refreshCustomerList();
+        loadView(null, '', 'all');
+        btn.disabled = false;
+        btn.innerText = "บันทึกข้อมูล";
+      }).saveData(fd);
+    }
+    function populateYearDropdown() {
+      const years = new Set();
+      fullData.forEach(item => {
+        if (item.date) {
+          const year = new Date(item.date).getFullYear();
+          if (!isNaN(year)) years.add(year);
+        }
+      });
+      
+      // เรียงปีจากมากไปน้อย (ปีล่าสุดขึ้นก่อน)
+      const yearArray = Array.from(years).sort((a, b) => b - a); 
+      const select = document.getElementById('yearFilter');
+      const currentVal = select.value;
+      
+      let html = `<option value="all">📅 ทุกปี</option>`;
+      yearArray.forEach(y => {
+        html += `<option value="${y}">ปี ${y}</option>`;
+      });
+      select.innerHTML = html;
+      
+      // รักษาค่าปีเดิมที่เลือกไว้ (ถ้ารีเฟรช)
+      if (yearArray.includes(Number(currentVal)) || currentVal === 'all') {
+        select.value = currentVal;
+      }
+    }
+
+    function applyMonthFilter(month) {
+      currentMonthFilter = month;
+      if (currentMode === 'monthlyReport') loadMonthlyReportView(currentActiveBtn);
+      if (currentMode === 'accDelivery') loadAccDeliveryView(currentActiveBtn);
+    }
+
+    function applyYearFilter(year) {
+      currentYearFilter = year;
+      if (currentMode === 'growth') loadGrowthView(currentActiveBtn);
+      else if (currentMode === 'monthlyReport') loadMonthlyReportView(currentActiveBtn);
+      else if (currentMode === 'accDelivery') loadAccDeliveryView(currentActiveBtn);
+      else filterAndRender(currentFilterValue, currentMode);
+    }
+    function refreshData() {
+      const icon = document.querySelector('#refreshBtn svg');
+      if (icon) icon.classList.add('animate-spin'); 
+      
+      google.script.run.withSuccessHandler(data => {
+        fullData = data;
+        populateYearDropdown();
+        
+        if (currentMode === 'growth') loadGrowthView(currentActiveBtn);
+        else if (currentMode === 'monthlyReport') loadMonthlyReportView(currentActiveBtn);
+        else if (currentMode === 'accDelivery') loadAccDeliveryView(currentActiveBtn);
+        else filterAndRender(currentFilterValue, currentMode);
+        
+        refreshCustomerList(); 
+        if (icon) icon.classList.remove('animate-spin');
+      }).getTransactions('');
+    }
+    function loadAccDeliveryView(btn) {
+  if (btn) {
+    document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('sidebar-active'));
+    btn.classList.add('sidebar-active');
+    currentActiveBtn = btn;
+  }
+  currentMode = 'accDelivery';
+  document.getElementById('pageTitle').innerText = "รายงานการนำส่งบัญชี";
+
+  if (window.innerWidth < 1024) toggleSidebar();
+  document.getElementById('monthFilter').classList.remove('hidden');
+
+  // โชว์สถานะกำลังโหลด
+  document.getElementById('tableSection').innerHTML = '<div class="text-center p-10 text-slate-400 font-bold animate-pulse">กำลังดึงข้อมูลประวัติ...</div>';
+
+  // 🆕 ดึงข้อมูล "หมายเหตุ" จากแท็บใหม่ที่ฝั่ง Backend ก่อน
+  google.script.run.withSuccessHandler(historyMap => {
+    globalAccHistory = historyMap; // เก็บไว้ใช้ตอนกด View และ Print
+    
+    let reportData = fullData.filter(i => i.sendAcc && i.sendAccDate);
+    const grouped = {};
+    reportData.forEach(i => {
+      if (!grouped[i.sendAccDate]) grouped[i.sendAccDate] = [];
+      grouped[i.sendAccDate].push(i);
+    });
+    
+    const sortedDates = Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a));
+
+    let tableRows = '';
+    sortedDates.forEach(date => {
+      const items = grouped[date];
+      
+      // 🆕 ดึงหมายเหตุจากแท็บใหม่ แทนการดึงจาก Col X ของตารางหลัก
+      const historyRecord = globalAccHistory[date] || { docList: "", remark: "" };
+      const remark = historyRecord.remark;
+      const remarkLines = remark.split('\n').filter(line => line.trim() !== '').length;
+      
+      const uniqueItems = [];
+      items.forEach(i => {
+        if (i.type.includes('ใบเสร็จ') && i.reference && i.reference !== "-") {
+           if (items.some(x => x.docNo === i.reference)) return;
+        }
+        uniqueItems.push(i);
+      });
+
+      // 🆕 คำนวณจำนวนเอกสารรวมกับหมายเหตุให้ถูกต้อง
+      const totalCount = uniqueItems.length + remarkLines;
+
+      const processedRows = new Set();
+      let totalNet = 0;
+      
+      uniqueItems.forEach(i => {
+        if (!processedRows.has(i.rowId)) {
+          totalNet += (Number(i.net) || 0);
+          processedRows.add(i.rowId); 
+        }
+      });
+
+      tableRows += `
+        <tr class="hover:bg-indigo-50/20">
+          <td class="p-4 font-bold text-slate-800">📅 ${new Date(date).toLocaleDateString('th-TH')}</td>
+          <td class="p-4 text-center font-black text-slate-700">${totalCount}</td>
+          <td class="p-4 text-right font-black text-indigo-600">${totalNet.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td class="p-4 text-center space-x-2">
+            <button onclick="openAccModal('${date}')" class="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="แก้ไข">✏️</button>
+            <button onclick="viewAcc('${date}')" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="ดูข้อมูล">👁️</button>
+            <button onclick="printAcc('${date}')" class="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="พิมพ์">🖨️</button>
+          </td>
+        </tr>`;
+    });
+
+    let html = `
+      <div class="flex justify-between items-center mb-6">
+        <h4 class="text-xl font-black text-slate-800 uppercase tracking-widest">ประวัติการนำส่งเอกสารให้บัญชี</h4>
+        <button onclick="openAccModal()" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all">
+          + นำส่งเอกสารใหม่
+        </button>
+      </div>
+      <div class="glass-card p-6 lg:p-8 border-t-[6px] border-indigo-500 shadow-lg bg-white animate-in fade-in pb-10">
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead class="bg-indigo-50 text-indigo-600 font-black uppercase text-[10px]">
+              <tr>
+                <th class="p-4">วันที่นำส่ง</th>
+                <th class="p-4 text-center">จำนวนเอกสาร (ใบ)</th>
+                <th class="p-4 text-right">ยอดรวมสุทธิ (บาท)</th>
+                <th class="p-4 text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">${tableRows || '<tr><td colspan="4" class="p-8 text-center text-slate-400 italic">ไม่พบประวัติการนำส่ง</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div id="accDetailView" class="mt-8"></div>`;
+
+    document.getElementById('tableSection').innerHTML = html;
+    
+  }).getAccHistoryData();
+}
+
+    function viewAcc(date) {
+  const dateStr = new Date(date).toLocaleDateString('th-TH');
+  const savedData = globalAccHistory[date] || { docList: "" };
+  
+  // แยกบรรทัดและสร้างเป็น List HTML
+  const listHtml = savedData.docList.split('\n')
+    .filter(line => line.trim() !== '')
+    .map(line => `<p class="text-sm font-bold text-slate-700 py-1.5 border-b border-slate-100 last:border-0 flex items-start gap-2"><span class="text-blue-500 mt-0.5">📄</span> ${line}</p>`)
+    .join('');
+
+  let html = `
+    <div class="glass-card p-6 border-l-[12px] border-blue-500 shadow-xl bg-white animate-in slide-in-from-bottom">
+      <div class="flex justify-between items-center mb-4">
+        <h4 class="text-lg font-black text-slate-800">รายการเอกสารนำส่งวันที่: <span class="text-blue-600">${dateStr}</span></h4>
+        <button onclick="document.getElementById('accDetailView').innerHTML=''" class="text-slate-400 hover:text-red-500 font-bold">✕ ปิด</button>
+      </div>
+      <div class="bg-blue-50/30 p-5 rounded-xl border border-blue-100">
+        ${listHtml || '<p class="text-slate-400 italic">ไม่มีข้อมูลรายการ</p>'}
+      </div>
+    </div>`;
+    
+  document.getElementById('accDetailView').innerHTML = html;
+  document.getElementById('accDetailView').scrollIntoView({behavior: 'smooth', block: 'end'});
+}
+
+    function printAcc(date) {
+  // ดึงรายการที่จัด Format ไว้แล้วจากประวัติ
+  const savedData = globalAccHistory[date] || { docList: "" };
+  const itemsToPrint = savedData.docList.split('\n').filter(line => line.trim() !== '');
+
+  const printWin = window.open('', '_blank');
+  const logoUrl = 'https://cdn.jsdelivr.net/gh/AgreenteaA1986/Logo@main/logo.png';
+
+  let html = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Print</title>
+    <style>
+      @media print { @page { size: A4 portrait; margin: 10mm; } }
+      body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; }
+      .page-container { width: 190mm; margin: 0 auto; padding: 5mm; box-sizing: border-box; page-break-after: always; }
+      .header { text-align: center; margin-bottom: 10px; }
+      .logo-img { width: 1.55cm; height: 1.71cm; object-fit: contain; display: block; margin: 0 auto 5px auto; }
+      .comp-name { font-size: 16px; font-weight: bold; }
+      .sub-title { font-size: 12px; }
+      .title-doc { text-align: center; font-size: 16px; font-weight: bold; margin: 15px 0; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #000; padding: 6px; font-size: 13px; }
+      th { background: #f0f0f0; text-align: center; }
+      .col-no { width: 10%; text-align: center; }
+      .col-item { width: 70%; }
+      .col-note { width: 20%; }
+      .footer-sign { margin-top: 30px; display: flex; justify-content: space-between; }
+      .sign-area { width: 45%; font-size: 13px; }
+      .line { border-bottom: 1px dotted #000; margin-top: 30px; }
+    </style>
+  </head>
+  <body>
+  `;
+
+  ['ต้นฉบับ', 'สำเนา'].forEach(type => {
+    html += `
+      <div class="page-container">
+        <div style="text-align:right;font-size:12px;">(${type})</div>
+        <div class="header">
+          <img src="${logoUrl}" class="logo-img" alt="Logo">
+          <div class="comp-name">บริษัท เอเอสเอพี บารอกัต จำกัด<br>(ASAP BARAKAT CO., LTD.)</div>
+          <div class="sub-title">Oil & Gas Supply Manpower Services</div>
+        </div>
+        <div class="title-doc">ทะเบียนรับ-ส่ง เอกสารสำคัญ</div>
+        <table>
+          <thead>
+            <tr><th class="col-no">ลำดับที่</th><th class="col-item">รายการ</th><th class="col-note">หมายเหตุ</th></tr>
+          </thead>
+          <tbody>
+    `;
+
+    let rowIndex = 1;
+    // วนลูปสร้างรายการเอกสาร รวมถึงบิลค่าน้ำบิลค่าไฟที่ถูกรวมมาด้วย
+    itemsToPrint.forEach(itemText => {
+      html += `
+        <tr>
+          <td class="col-no">${rowIndex++}</td>
+          <td class="col-item">${itemText.replace(/^\d+\.\s*/, '')}</td>
+          <td class="col-note"></td>
+        </tr>
+      `;
+    });
+
+    while (rowIndex <= 15) {
+      html += `<tr><td class="col-no">${rowIndex++}</td><td class="col-item"></td><td class="col-note"></td></tr>`;
+    }
+
+    html += `
+          </tbody>
+        </table>
+        <div class="footer-sign">
+          <div class="sign-area"><p>ผู้ส่ง บริษัทเอเอสเอพี บารอกัต จำกัด</p><div class="line"></div><p>ลงวันที่ ......................................</p></div>
+          <div class="sign-area"><p>ผู้รับ .....................................................</p><div class="line"></div><p>ลงวันที่ ......................................</p></div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `<script>window.onload = function(){setTimeout(function(){window.print();window.close();}, 1000);};<\/script></body></html>`;
+  printWin.document.open();
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+    function openAccModal(existingDate = null) {
+  const isEdit = existingDate !== null;
+  const targetDate = isEdit ? existingDate : new Date().toISOString().split('T')[0];
+  
+  // กรองรายการ
+  let items = fullData.filter(i => {
+     if(!i.docNo || i.net <= 0) return false; 
+     if(isEdit && i.sendAccDate === existingDate) return true;
+     return !i.sendAcc; 
+  });
+  items.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  const remarkItem = items.find(i => i.deliveryRemark);
+  const existingRemark = remarkItem ? remarkItem.deliveryRemark : '';
+
+  let modalHtml = `
+    <div id="accDeliveryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[110] p-4">
+      <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div class="px-8 py-6 border-b flex justify-between items-center shrink-0">
+          <h3 class="text-lg font-black text-slate-800">✏️ จัดการใบนำส่งบัญชี</h3>
+          <button onclick="document.getElementById('accDeliveryModal').remove()" class="text-slate-400 font-bold hover:text-red-500">✕</button>
+        </div>
+        
+        <div class="p-8 overflow-y-auto flex-1">
+          <div class="mb-6 p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+            <label class="text-[10px] font-black text-yellow-700 uppercase">รายการเอกสารอื่นๆ / หมายเหตุ</label>
+            <textarea id="accRemarkInput" rows="3" class="w-full mt-2 p-3 rounded-xl border border-yellow-200 text-sm outline-none">${existingRemark}</textarea>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <div class="flex-1">
+              <label class="text-[10px] font-black text-slate-400 uppercase">วันที่ส่งเอกสาร</label>
+              <input type="date" id="accSendDate" value="${targetDate}" class="w-full mt-1 p-3 border rounded-xl font-bold">
+            </div>
+          </div>
+          <div class="mb-4 relative">
+          <input type="text" id="accModalSearch" onkeyup="filterAccModalTable()" placeholder="🔍 ค้นหาเลขที่เอกสาร, ชื่อลูกค้า, หรือวันที่..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+          </div>
+
+          <table class="w-full text-left text-xs" id="accModalTable">
+            <thead class="text-slate-400 uppercase">
+              <tr class="border-b"><th class="p-3">เลือก</th><th class="p-3">วันที่</th><th class="p-3">เลขที่</th><th class="p-3">ลูกค้า</th></tr>
+            </thead>
+            <tbody class="divide-y" id="accModalTbody">
+              ${items.map(i => `
+                <tr class="hover:bg-slate-50">
+                  <td class="p-3">
+                    <input type="checkbox" class="acc-item-cb" 
+                    value="${i.rowId}" 
+                    data-year="${new Date(i.date).getFullYear()}" 
+                    data-fullname="${i.customer} ${i.type} เลขที่ ${i.docNo}" 
+                    ${i.sendAccDate === existingDate ? 'checked' : ''}>
+                  </td>
+                  <td class="p-3">${i.date}</td>
+                  <td class="p-3 font-bold">${i.docNo}</td>
+                  <td class="p-3">${i.customer}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="p-6 border-t flex justify-end gap-3 shrink-0">
+          <button onclick="document.getElementById('accDeliveryModal').remove()" class="px-6 py-2 text-slate-400 font-bold text-xs">ยกเลิก</button>
+          <button onclick="submitAccDelivery()" class="px-8 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs">บันทึกข้อมูล</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+    function filterAccModalTable() {
+    const input = document.getElementById("accModalSearch");
+    if (!input) return; // ป้องกัน Error ถ้าไม่มีช่องค้นหา
+    const filter = input.value.toUpperCase();
+    const tbody = document.getElementById("accModalTbody");
+    const tr = tbody.getElementsByTagName("tr");
+    
+    for (let i = 0; i < tr.length; i++) {
+      const textValue = tr[i].textContent || tr[i].innerText;
+      tr[i].style.display = textValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+    }
+  }
+
+    function toggleAllAccItems(cb) {
+       document.querySelectorAll('.acc-item-cb').forEach(box => box.checked = cb.checked);
+    }
+
+    function submitAccDelivery() {
+  const dateVal = document.getElementById('accSendDate').value;
+  const remarkVal = document.getElementById('accRemarkInput').value;
+  
+  if(!dateVal) return alert('กรุณาระบุวันที่นำส่ง');
+  
+  const selectedItems = [];
+  const docListArray = []; // ตัวแปรเก็บข้อความรายการเอกสารแบบเต็ม
+  
+  document.querySelectorAll('.acc-item-cb').forEach(box => {
+    selectedItems.push({
+      rowId: box.value,
+      docYear: box.getAttribute('data-year'), // 🆕 ส่งปีแท้จริงของเอกสารไปด้วย
+      isChecked: box.checked
+    });
+    
+    if(box.checked) {
+      docListArray.push(box.getAttribute('data-fullname'));
+    }
+  });
+  
+  // นำรายการที่พิมพ์เพิ่มใน Textarea มาแยกบรรทัดและต่อท้ายใน Array เดียวกัน
+  if (remarkVal.trim() !== '') {
+    const extraItems = remarkVal.split('\n').filter(line => line.trim() !== '');
+    docListArray.push(...extraItems);
+  }
+  
+  if(selectedItems.length === 0 && docListArray.length === 0) return alert('กรุณาเลือกเอกสารหรือพิมพ์รายการเพิ่มเติมอย่างน้อย 1 รายการ');
+  
+  const btn = document.querySelector('#accDeliveryModal button.bg-indigo-600');
+  btn.innerText = 'กำลังบันทึก...';
+  btn.disabled = true;
+
+  // เชื่อมทุกบรรทัดด้วยการขึ้นบรรทัดใหม่ (\n)
+  const docListStr = docListArray.join('\n');
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      alert(msg);
+      document.getElementById('accDeliveryModal').remove();
+      refreshData(); 
+    })
+    .withFailureHandler(err => {
+      alert("เกิดข้อผิดพลาด: " + err);
+      btn.disabled = false;
+      btn.innerText = 'บันทึกข้อมูล';
+    })
+    .saveAccDelivery({ 
+      deliveryDate: dateVal, 
+      items: selectedItems, 
+      docList: docListStr, // ส่งข้อความที่ประกอบร่างแล้วไปที่ Col B
+      remark: "" // เคลียร์ช่องหมายเหตุ (Col C) เป็นค่าว่าง เพราะเอามารวมในรายการแล้ว
+    });
+}
+  </script>
+</body>
+</html>
