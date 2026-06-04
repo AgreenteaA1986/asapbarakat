@@ -487,41 +487,46 @@ function loadView(btn, filterValue, mode) {
   document.getElementById('tableSection').innerHTML = html;
 }
 
-    function filterAndRender(val, mode) {
-  document.getElementById('chartsSection').style.display = '';
-  
-  let displayData = fullData;
+function filterAndRender(val, mode) {
+      document.getElementById('chartsSection').style.display = '';
+      
+      let displayData = fullData;
 
-  // 1. กรองตามปีที่เลือกก่อน
-  if (currentYearFilter !== 'all') {
-    displayData = displayData.filter(i => {
-      if (!i.date) return false;
-      return new Date(i.date).getFullYear().toString() === currentYearFilter;
-    });
-  }
+      // 1. กรองตามปีที่เลือกก่อน
+      if (currentYearFilter !== 'all') {
+        displayData = displayData.filter(i => {
+          if (!i.date) return false;
+          return new Date(i.date).getFullYear().toString() === currentYearFilter;
+        });
+      }
 
-  // 2. กรองตาม Mode (เปลี่ยนจาก fullData เป็น displayData เพื่อให้กรองทบกัน)
-  if (mode === 'customer' || mode === 'search') {
-    const q = val.toLowerCase().trim();
-    displayData = displayData.filter(i => 
-      i.customer.toLowerCase().includes(q) || 
-      i.docNo.toLowerCase().includes(q) || 
-      (i.reference && i.reference.toLowerCase().includes(q))
-    );
-  } else if (mode === 'status') {
-    displayData = displayData.filter(i => i.status === val);
-    if (val === 'ชำระแล้ว') {
-      displayData = displayData.filter(i => i.type.includes('ใบเสร็จ'));
-    } else if (val === 'วางบิล') {
-      displayData = displayData.filter(i => i.type.includes('ใบแจ้งหนี้'));
+      // 2. กรองตาม Mode (เปลี่ยนจาก fullData เป็น displayData เพื่อให้กรองทบกัน)
+      if (mode === 'customer' || mode === 'search') {
+        const q = val.toLowerCase().trim();
+        displayData = displayData.filter(i => 
+          i.customer.toLowerCase().includes(q) || 
+          i.docNo.toLowerCase().includes(q) || 
+          (i.reference && i.reference.toLowerCase().includes(q))
+        );
+      } else if (mode === 'status') {
+        // กรองเอาเฉพาะสถานะที่เลือกก่อน
+        displayData = displayData.filter(i => i.status === val);
+        
+        // 🔄 กรองขั้นที่สอง เพื่อแสดงตัวแทนเอกสารแค่ "ใบเดียว" ต่อ 1 งานให้สอดคล้องกับยอดรวม
+        if (val === 'ชำระแล้ว') {
+          displayData = displayData.filter(i => i.type.includes('ใบเสร็จ'));
+        } else if (val === 'ค้างชำระ') {
+          displayData = displayData.filter(i => i.type.includes('ใบวางบิล'));
+        } else if (val === 'รอดำเนินการ') {
+          displayData = displayData.filter(i => i.type.includes('ใบส่งงาน'));
+        }
+      }
+
+      // 3. ส่งข้อมูลที่ผ่านการกรองแล้วทั้ง 2 ชั้นไปแสดงผล
+      renderAnalytics(displayData, mode, val);
+      renderCharts(displayData, mode, val);
+      renderContent(displayData, mode);
     }
-  }
-
-  // 3. ส่งข้อมูลที่ผ่านการกรองแล้วทั้ง 2 ชั้นไปแสดงผล
-  renderAnalytics(displayData, mode, val);
-  renderCharts(displayData, mode, val);
-  renderContent(displayData, mode);
-}
 
     function calculateKPIStats(data) {
   let totalDays = 0; // เพิ่มบรรทัดนี้
@@ -1029,13 +1034,31 @@ function renderContent(data, mode) {
       return !isAlreadyPaid;
     });
 
-    const allDebtorMap = activeDebtors.reduce((acc, curr) => {
+    // 🆕 สร้าง Map เพื่อกรองรายการซ้ำในแถวเดียวกัน (rowId เดียวกัน) ให้เหลือแค่ 1 งาน
+    const uniqueDebtorRows = new Map();
+    activeDebtors.forEach(i => {
+      if (!uniqueDebtorRows.has(i.rowId)) {
+        uniqueDebtorRows.set(i.rowId, i);
+      } else {
+        // หากในแถวเดียวกันมีเอกสารหลายใบ ให้ยึด "ใบวางบิล" เป็นหลัก เพื่อเอาวันที่ไปคำนวณความล่าช้า (Overdue) ได้แม่นยำที่สุด
+        if (i.type.includes('ใบวางบิล')) {
+          uniqueDebtorRows.set(i.rowId, i);
+        }
+      }
+    });
+    
+    // เปลี่ยนมาใช้ array ที่กรองข้อมูลซ้ำออกแล้ว
+    const uniqueActiveDebtors = Array.from(uniqueDebtorRows.values());
+
+    // 🆕 บวกยอด 5 อันดับแรก (ใช้ข้อมูลที่ไม่ซ้ำแล้ว)
+    const allDebtorMap = uniqueActiveDebtors.reduce((acc, curr) => {
       acc[curr.customer] = (acc[curr.customer] || 0) + curr.net;
       return acc;
     }, {});
     const top5Debtors = Object.entries(allDebtorMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-    const overdueMap = activeDebtors.filter(i => {
+    // 🆕 บวกยอด Overdue 30 วัน (ใช้ข้อมูลที่ไม่ซ้ำแล้ว)
+    const overdueMap = uniqueActiveDebtors.filter(i => {
       if (!i.date) return false;
       const diffDays = Math.ceil((today - new Date(i.date)) / (1000 * 60 * 60 * 24));
       return diffDays > 30;
@@ -1500,41 +1523,44 @@ function renderContent(data, mode) {
   if (window.innerWidth < 1024) toggleSidebar();
   document.getElementById('monthFilter').classList.remove('hidden');
 
-  // โชว์สถานะกำลังโหลด
+  // 🧹 1. ล้างหน้าจอ (Clear DOM) ของเมนูเก่าทิ้งให้หมดทันที 
+  // (แก้ปัญหา UI ซ้อนกัน และช่วยลดอาการค้างเพราะเบราว์เซอร์ไม่ต้องแบกภาระกราฟเดิม)
+  document.getElementById('analytics').innerHTML = '';
+  document.getElementById('chartsSection').style.display = 'none';
+  document.getElementById('kpi-efficiency-section').innerHTML = '';
+  document.getElementById('summaryCards').innerHTML = '';
+
+  // 2. โชว์สถานะกำลังโหลด
   document.getElementById('tableSection').innerHTML = '<div class="text-center p-10 text-slate-400 font-bold animate-pulse">กำลังดึงข้อมูลประวัติ...</div>';
 
-  // 🆕 ดึงข้อมูล "หมายเหตุ" จากแท็บใหม่ที่ฝั่ง Backend ก่อน
   google.script.run.withSuccessHandler(historyMap => {
-    globalAccHistory = historyMap; // เก็บไว้ใช้ตอนกด View และ Print
+    globalAccHistory = historyMap; 
     
     let reportData = fullData.filter(i => i.sendAcc && i.sendAccDate);
-    const grouped = {};
-    reportData.forEach(i => {
-      if (!grouped[i.sendAccDate]) grouped[i.sendAccDate] = [];
-      grouped[i.sendAccDate].push(i);
-    });
+    
+    // Grouping ด้วย reduce จะเร็วกว่า forEach ทั่วไปเล็กน้อย
+    const grouped = reportData.reduce((acc, i) => {
+      if (!acc[i.sendAccDate]) acc[i.sendAccDate] = [];
+      acc[i.sendAccDate].push(i);
+      return acc;
+    }, {});
     
     const sortedDates = Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a));
 
     let tableRows = '';
     sortedDates.forEach(date => {
       const items = grouped[date];
-      
-      // 🆕 ดึงหมายเหตุจากแท็บใหม่ แทนการดึงจาก Col X ของตารางหลัก
       const historyRecord = globalAccHistory[date] || { docList: "", remark: "" };
-      const remark = historyRecord.remark;
-      const remarkLines = remark.split('\n').filter(line => line.trim() !== '').length;
+      const totalCount = historyRecord.docList ? historyRecord.docList.split('\n').filter(line => line.trim() !== '').length : 0;
       
-      const uniqueItems = [];
-      items.forEach(i => {
+      const docNosInGroup = new Set(items.map(x => x.docNo));
+      
+      const uniqueItems = items.filter(i => {
         if (i.type.includes('ใบเสร็จ') && i.reference && i.reference !== "-") {
-           if (items.some(x => x.docNo === i.reference)) return;
+           if (docNosInGroup.has(i.reference)) return false;
         }
-        uniqueItems.push(i);
+        return true;
       });
-
-      // 🆕 คำนวณจำนวนเอกสารรวมกับหมายเหตุให้ถูกต้อง
-      const totalCount = uniqueItems.length + remarkLines;
 
       const processedRows = new Set();
       let totalNet = 0;
@@ -1555,6 +1581,7 @@ function renderContent(data, mode) {
             <button onclick="openAccModal('${date}')" class="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="แก้ไข">✏️</button>
             <button onclick="viewAcc('${date}')" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="ดูข้อมูล">👁️</button>
             <button onclick="printAcc('${date}')" class="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="พิมพ์">🖨️</button>
+            <button onclick="deleteAccDelivery(this, '${date}')" class="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="ยกเลิกรายการ">❌</button>
           </td>
         </tr>`;
     });
@@ -1700,7 +1727,7 @@ function renderContent(data, mode) {
   printWin.document.close();
 }
 
-    function openAccModal(existingDate = null) {
+  function openAccModal(existingDate = null) {
   const isEdit = existingDate !== null;
   const targetDate = isEdit ? existingDate : new Date().toISOString().split('T')[0];
   
@@ -1710,10 +1737,32 @@ function renderContent(data, mode) {
      if(isEdit && i.sendAccDate === existingDate) return true;
      return !i.sendAcc; 
   });
-  items.sort((a,b) => new Date(a.date) - new Date(b.date));
 
-  const remarkItem = items.find(i => i.deliveryRemark);
-  const existingRemark = remarkItem ? remarkItem.deliveryRemark : '';
+  // 🆕 จัดเรียง: ให้รายการที่เคยถูกเลือก (Checked) ขึ้นก่อน แล้วตามด้วยวันที่
+  items.sort((a,b) => {
+    const aChecked = isEdit && a.sendAccDate === existingDate;
+    const bChecked = isEdit && b.sendAccDate === existingDate;
+    
+    if (aChecked && !bChecked) return -1; // a ถูกเลือก ให้อยู่บน
+    if (!aChecked && bChecked) return 1;  // b ถูกเลือก ให้อยู่บน
+    
+    // ถ้าสถานะเหมือนกัน ให้เรียงตามวันที่เอกสาร
+    return new Date(a.date) - new Date(b.date);
+  });
+
+  // 🆕 ดึงข้อมูลหมายเหตุ (Textarea)
+  let existingRemark = '';
+  if (isEdit && globalAccHistory[existingDate]) {
+      existingRemark = globalAccHistory[existingDate].remark || '';
+      
+      // 🛡️ Fallback สำหรับข้อมูลเก่า: ถ้าช่องหมายเหตุ (Col C) ว่าง 
+      // ให้ดึงบรรทัดที่ไม่มีคำว่า "เลขที่" จากรายการเต็ม (Col B) มาแสดงเป็นหมายเหตุแทน
+      if (!existingRemark && globalAccHistory[existingDate].docList) {
+         const lines = globalAccHistory[existingDate].docList.split('\n');
+         const manualLines = lines.filter(line => !line.includes('เลขที่') && line.trim() !== '');
+         existingRemark = manualLines.join('\n');
+      }
+  }
 
   let modalHtml = `
     <div id="accDeliveryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[110] p-4">
@@ -1753,7 +1802,7 @@ function renderContent(data, mode) {
                     data-fullname="${i.customer} ${i.type} เลขที่ ${i.docNo}" 
                     ${i.sendAccDate === existingDate ? 'checked' : ''}>
                   </td>
-                  <td class="p-3">${i.date}</td>
+                  <td class="p-3">${i.date ? new Date(i.date).toLocaleDateString('th-TH') : '-'}</td>
                   <td class="p-3 font-bold">${i.docNo}</td>
                   <td class="p-3">${i.customer}</td>
                 </tr>
@@ -1839,9 +1888,35 @@ function renderContent(data, mode) {
       deliveryDate: dateVal, 
       items: selectedItems, 
       docList: docListStr, // ส่งข้อความที่ประกอบร่างแล้วไปที่ Col B
-      remark: "" // เคลียร์ช่องหมายเหตุ (Col C) เป็นค่าว่าง เพราะเอามารวมในรายการแล้ว
+      remark: remarkVal // 🆕 แก้ไขให้ส่งค่า remarkVal กลับไปบันทึกด้วย
     });
 }
+// 🆕 ฟังก์ชันทำงานเมื่อกดปุ่มกากบาทสีแดง
+    function deleteAccDelivery(date) {
+      const dateStr = new Date(date).toLocaleDateString('th-TH');
+      
+      // ให้ User กดยืนยันก่อนเสมอเพื่อป้องกันการกดพลาด
+      if (!confirm(`⚠️ ยืนยันการยกเลิกรายการนำส่งวันที่ ${dateStr} ใช่หรือไม่?\n\nเอกสารทั้งหมดในรอบนี้จะถูกเปลี่ยนสถานะกลับเป็น "ยังไม่นำส่ง" และคุณสามารถจัดกลุ่มนำส่งใหม่ได้`)) {
+        return;
+      }
+      
+      const btn = event.currentTarget;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳';
+      btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(msg => {
+          alert(msg);
+          refreshData(); // รีเฟรชหน้าจอเพื่อดึงข้อมูลใหม่
+        })
+        .withFailureHandler(err => {
+          alert("เกิดข้อผิดพลาด: " + err);
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        })
+        .deleteAccRecord(date); // สั่งทำงานฝั่ง Server
+    }
   </script>
 </body>
 </html>

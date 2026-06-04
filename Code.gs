@@ -73,16 +73,25 @@ function getTransactions(customerName = null) {
           // 🆕 ดึงข้อมูล "เอกสารอื่นๆ / หมายเหตุ" จาก Col X (Index 23)
           const deliveryRemark = row[23] ? row[23].toString().trim() : "";
           
+          // ----------------------------------------------------
+          // 🔄 อัปเดต Logic สถานะให้ตรงตามเงื่อนไขการแสดงผล (รอดำเนินการ / ค้างชำระ / ชำระแล้ว)
+          // ----------------------------------------------------
           let smcStatus = "", invStatus = "", blStatus = "", rcStatus = "";
+          
           if (rcNo) {
+            // ถ้ามีเลขใบเสร็จ (คอลัมน์ I) -> ปิดจบเป็น "ชำระแล้ว" ทั้งหมด
             smcStatus = "ชำระแล้ว"; invStatus = "ชำระแล้ว"; blStatus = "ชำระแล้ว"; rcStatus = "ชำระแล้ว";
           } else if (blNo) {
-            smcStatus = "วางบิล"; invStatus = "วางบิล"; blStatus = "ค้างชำระ";
+            // ถ้ามีเลขใบวางบิล (คอลัมน์ G) แต่ยังไม่มีใบเสร็จ -> ตีเป็น "ค้างชำระ" ทั้งหมด
+            smcStatus = "ค้างชำระ"; invStatus = "ค้างชำระ"; blStatus = "ค้างชำระ";
           } else if (invNo) {
+            // ถ้ามีใบแจ้งหนี้ (คอลัมน์ E) แต่ยังไม่วางบิล -> ตีเป็น "รอดำเนินการ"
             smcStatus = "รอดำเนินการ"; invStatus = "รอดำเนินการ";
           } else if (smcNo) {
+            // ถ้ามีแค่ใบส่งงาน (คอลัมน์ C) -> ตีเป็น "รอดำเนินการ"
             smcStatus = "รอดำเนินการ";
           }
+          // ----------------------------------------------------
 
           // 🆕 ส่งตัวแปร deliveryRemark พ่วงไปด้วย
           if (smcNo) transactions.push(createTxObj('ใบส่งงาน/สรุปค่าใช้จ่าย', smcNo, smcDate, rowCust, subtotal, vat, wht, net, smcStatus, "-", index + 2, docWht, sendAcc, sendAccDate, deliveryRemark));
@@ -285,4 +294,28 @@ function getAccHistoryData() {
     }
   }
   return historyMap;
+}
+// 🆕 ฟังก์ชันทำงานเมื่อกดปุ่มกากบาทสีแดง (ปรับการรับตัวแปร btn ให้รัดกุมขึ้น)
+function deleteAccDelivery(btn, date) {
+  const dateStr = new Date(date).toLocaleDateString('th-TH');
+  
+  if (!confirm(`⚠️ ยืนยันการยกเลิกรายการนำส่งวันที่ ${dateStr} ใช่หรือไม่?\n\nเอกสารทั้งหมดในรอบนี้จะถูกเปลี่ยนสถานะกลับเป็น "ยังไม่นำส่ง" และคุณสามารถจัดกลุ่มนำส่งใหม่ได้`)) {
+    return;
+  }
+  
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '⏳';
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      alert(msg);
+      refreshData(); 
+    })
+    .withFailureHandler(err => {
+      alert("เกิดข้อผิดพลาด: " + err);
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    })
+    .deleteAccRecord(date); 
 }
